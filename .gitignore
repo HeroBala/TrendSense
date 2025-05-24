@@ -1,0 +1,41 @@
+# 🔐 Secrets
+.env
+
+# 🧪 Virtual Environments
+venv/
+.env/
+.env.bak/
+
+# 💾 Bytecode
+__pycache__/
+*.py[cod]
+*.pyo
+
+# 📦 Package/Build
+dist/
+build/
+*.egg-info/
+
+# 🧪 Testing
+.coverage
+.cache
+nosetests.xml
+pytest_cache/
+
+# 📂 Logs
+*.log
+
+# 🔧 IDEs
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# 📈 Jupyter Notebooks
+.ipynb_checkpoints/
+
+# 🗃️ Data Dumps
+data/*.csv
+data/*.json
+data/*.pkl
+
