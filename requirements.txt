@@ -1,2 +1,4 @@
 praw 
 Python-dotenv
+pandas
+openpyxl
