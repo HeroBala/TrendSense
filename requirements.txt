@@ -6,4 +6,8 @@ spacy
 beautifulsoup4
 scikit-learn
 tqdm
-
+bertopic
+sentence-transformers
+umap-learn
+joblib
+hdbscan
