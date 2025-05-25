@@ -11,3 +11,4 @@ sentence-transformers
 umap-learn
 joblib
 hdbscan
+nltk
