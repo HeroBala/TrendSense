@@ -1,4 +1,9 @@
-praw 
-Python-dotenv
+praw
+python-dotenv
 pandas
 openpyxl
+spacy
+beautifulsoup4
+scikit-learn
+tqdm
+
