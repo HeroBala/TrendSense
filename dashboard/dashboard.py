@@ -90,6 +90,29 @@ col_a.metric("Total Documents", len(filtered))
 col_b.metric("Unique Subreddits", filtered["subreddit"].nunique())
 col_c.metric("Average Sentiment", round(filtered["sent_compound"].mean(), 2))
 
+# ================== DARK THEME SETTINGS ===================
+dark_layout = dict(
+    plot_bgcolor='#121212',
+    paper_bgcolor='#121212',
+    font=dict(color='white'),
+    xaxis=dict(title='', showgrid=True, gridcolor='#333'),
+    yaxis=dict(title='', showgrid=True, gridcolor='#333'),
+    legend_title=dict(font=dict(color='white')),
+    title_font=dict(color='white')
+)
+
+sentiment_colors = {
+    "Positive": "#2ca02c",  # green
+    "Neutral": "#1f77b4",   # blue
+    "Negative": "#ff7f0e"   # orange
+}
+
+def apply_dark_theme(fig, title=None):
+    if title:
+        fig.update_layout(title=title)
+    fig.update_layout(**dark_layout)
+    return fig
+
 # ================== TABS ===================
 tabs = st.tabs([":chart_with_upwards_trend: Charts", ":cloud: Word Cloud", ":page_facing_up: Documents", ":package: Raw JSON", ":brain: Topic Stats"])
 
@@ -98,6 +121,15 @@ with tabs[0]:
     st.subheader(":calendar: Daily Sentiment Trends")
     filtered["date_only"] = filtered["date"].dt.date
     trend_df = filtered.groupby(["date_only", "Sentiment"]).size().reset_index(name="count")
+
+    # Determine last 7 days range for default view
+    if not trend_df["date_only"].empty:
+        max_date = trend_df["date_only"].max()
+        min_date = max_date - timedelta(days=6)  # last 7 days
+        x_range = [min_date, max_date]
+    else:
+        x_range = None
+
     fig_trend = px.line(
         trend_df,
         x="date_only",
@@ -105,23 +137,27 @@ with tabs[0]:
         color="Sentiment",
         title="Daily Sentiment Counts",
         markers=True,
+        color_discrete_map=sentiment_colors
     )
-    fig_trend.update_layout(legend_title_text='Sentiment')
     fig_trend.update_traces(mode="lines+markers")
-    fig_trend.update_xaxes(rangeslider_visible=True)
+    fig_trend.update_xaxes(rangeslider_visible=True, range=x_range)
+    fig_trend = apply_dark_theme(fig_trend)
     st.plotly_chart(fig_trend, use_container_width=True)
 
     st.subheader(":bar_chart: Subreddits by Average Score")
     top_scores = filtered.groupby("subreddit")["score"].mean().reset_index().nlargest(top_n, "score")
     fig_scores = px.bar(top_scores, x="score", y="subreddit", orientation="h", title="Top Subreddits by Avg Score")
+    fig_scores = apply_dark_theme(fig_scores)
     st.plotly_chart(fig_scores, use_container_width=True)
 
     st.subheader(":mag: Sentiment vs Score Scatter")
-    fig_scatter = px.scatter(filtered, x="score", y="sent_compound", color="Sentiment", hover_data=["title"])
+    fig_scatter = px.scatter(filtered, x="score", y="sent_compound", color="Sentiment", hover_data=["title"], color_discrete_map=sentiment_colors)
+    fig_scatter = apply_dark_theme(fig_scatter)
     st.plotly_chart(fig_scatter, use_container_width=True)
 
     st.subheader(":bar_chart: Score Distribution")
     fig_hist = px.histogram(filtered, x="score", nbins=30, title="Distribution of Scores")
+    fig_hist = apply_dark_theme(fig_hist)
     st.plotly_chart(fig_hist, use_container_width=True)
 
 # ========= Word Cloud =========
@@ -160,5 +196,6 @@ with tabs[4]:
 
     st.subheader(":bar_chart: Sentiment Distribution by Subreddit")
     dist_data = filtered.groupby(["subreddit", "Sentiment"]).size().reset_index(name="count")
-    fig_dist = px.bar(dist_data, x="subreddit", y="count", color="Sentiment", barmode="stack")
+    fig_dist = px.bar(dist_data, x="subreddit", y="count", color="Sentiment", barmode="stack", color_discrete_map=sentiment_colors)
+    fig_dist = apply_dark_theme(fig_dist)
     st.plotly_chart(fig_dist, use_container_width=True)
