@@ -7,6 +7,7 @@ import warnings
 from typing import List, Optional
 from bs4 import BeautifulSoup, MarkupResemblesLocatorWarning
 from tqdm import tqdm
+from spacy.cli import download as spacy_download
 
 # ========== CONFIG ==========
 INPUT_FILE = "data/ecommerce_full.json"
@@ -25,23 +26,35 @@ logging.basicConfig(
 warnings.filterwarnings("ignore", category=MarkupResemblesLocatorWarning)
 
 # ========== LOAD NLP MODEL ==========
-try:
-    logging.info(f"⏳ Loading spaCy model '{SPACY_MODEL}'...")
-    nlp = spacy.load(SPACY_MODEL, disable=["ner", "parser"])
-    logging.info("✅ spaCy model loaded.")
-except OSError:
-    raise SystemExit("❌ spaCy model not found. Run: python -m spacy download en_core_web_sm")
+def load_spacy_model(model_name: str):
+    try:
+        logging.info(f"⏳ Loading spaCy model '{model_name}'...")
+        return spacy.load(model_name, disable=["ner", "parser"])
+    except OSError:
+        logging.warning(f"⚠️ Model '{model_name}' not found. Attempting download...")
+        spacy_download(model_name)
+        return spacy.load(model_name, disable=["ner", "parser"])
+
+nlp = load_spacy_model(SPACY_MODEL)
+logging.info("✅ spaCy model ready.")
 
 # ========== REGEX PATTERNS ==========
-URL_PATTERN = re.compile(r"https?://\S+|www\.\S+")
-SPECIAL_PATTERN = re.compile(r"[^\w\s]")
-EMOJI_PATTERN = re.compile("[" 
-    u"\U0001F600-\U0001F64F"
-    u"\U0001F300-\U0001F5FF"
-    u"\U0001F680-\U0001F6FF"
-    u"\U0001F1E0-\U0001F1FF"
-    "]+", flags=re.UNICODE)
-MULTISPACE_PATTERN = re.compile(r"\s+")
+URL_REGEX = r"https?://\S+|www\.\S+"
+EMOJI_REGEX = "[" \
+              u"\U0001F600-\U0001F64F" \
+              u"\U0001F300-\U0001F5FF" \
+              u"\U0001F680-\U0001F6FF" \
+              u"\U0001F1E0-\U0001F1FF" \
+              "]+"
+MARKDOWN_REGEX = r"(?m)^#{1,6}|\*|[-•]"
+SPECIAL_REGEX = r"[^\w\s]"
+MULTISPACE_REGEX = r"\s+"
+
+URL_PATTERN = re.compile(URL_REGEX)
+EMOJI_PATTERN = re.compile(EMOJI_REGEX)
+MARKDOWN_PATTERN = re.compile(MARKDOWN_REGEX)
+SPECIAL_PATTERN = re.compile(SPECIAL_REGEX)
+MULTISPACE_PATTERN = re.compile(MULTISPACE_REGEX)
 
 # ========== CUSTOM STOPWORDS ==========
 CUSTOM_STOPWORDS = {
@@ -55,7 +68,7 @@ def basic_clean(text: Optional[str]) -> str:
     if not isinstance(text, str):
         return ""
     text = BeautifulSoup(text, "html.parser").get_text()
-    text = re.sub(r"(?m)^#{1,6}|\*|[-•]", " ", text)  # markdown headers and bullets
+    text = MARKDOWN_PATTERN.sub(" ", text)
     text = URL_PATTERN.sub(" ", text)
     text = EMOJI_PATTERN.sub(" ", text)
     text = SPECIAL_PATTERN.sub(" ", text)
@@ -91,7 +104,7 @@ def clean_dataframe(df: pd.DataFrame, columns: List[str]) -> pd.DataFrame:
             df[f"clean_{col}"] = ""
         else:
             df[f"clean_{col}"] = lemmatize_texts(texts)
-            df[f"clean_{col}"] = df[f"clean_{col}"].str.replace(r"\s+", " ", regex=True)
+            df[f"clean_{col}"] = df[f"clean_{col}"].str.replace(MULTISPACE_REGEX, " ", regex=True)
 
         # Show sample
         logging.info(f"🔍 Sample '{col}' clean preview:")
