@@ -10,7 +10,7 @@ from tqdm import tqdm
 from spacy.cli import download as spacy_download
 
 # ========== CONFIG ==========
-INPUT_FILE = "data/ecommerce_full.json"
+INPUT_FILE = "data/ecommerce_advanced.json"
 OUTPUT_FILE = "data/cleaned_data.xlsx"
 COLUMNS_TO_CLEAN = ["text", "title"]
 SPACY_MODEL = "en_core_web_sm"
@@ -41,11 +41,11 @@ logging.info("✅ spaCy model ready.")
 # ========== REGEX PATTERNS ==========
 URL_REGEX = r"https?://\S+|www\.\S+"
 EMOJI_REGEX = "[" \
-              u"\U0001F600-\U0001F64F" \
-              u"\U0001F300-\U0001F5FF" \
-              u"\U0001F680-\U0001F6FF" \
-              u"\U0001F1E0-\U0001F1FF" \
-              "]+"
+            u"\U0001F600-\U0001F64F" \
+            u"\U0001F300-\U0001F5FF" \
+            u"\U0001F680-\U0001F6FF" \
+            u"\U0001F1E0-\U0001F1FF" \
+            "]+"
 MARKDOWN_REGEX = r"(?m)^#{1,6}|\*|[-•]"
 SPECIAL_REGEX = r"[^\w\s]"
 MULTISPACE_REGEX = r"\s+"
