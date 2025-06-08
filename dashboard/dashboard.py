@@ -27,8 +27,7 @@ def get_sentiment_label(score):
 @st.cache_data
 def load_all_data():
     cleaned = pd.read_excel("data/cleaned_data.xlsx")
-    with open("data/ecommerce_full.json") as f:
-        raw = pd.DataFrame(json.load(f))
+    raw = pd.read_excel("data/ecommerce_full.xlsx", engine="openpyxl")
 
     if "date" not in cleaned.columns or cleaned["date"].isnull().all():
         if "created_utc" in cleaned.columns:

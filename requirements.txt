@@ -16,3 +16,4 @@ streamlit
 plotly
 matplotlib
 wordcloud
+vaderSentiment
