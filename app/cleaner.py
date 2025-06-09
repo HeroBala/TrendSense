@@ -10,11 +10,11 @@ from tqdm import tqdm
 from spacy.cli import download as spacy_download
 
 # ========== CONFIG ==========
-INPUT_FILE = "data/ecommerce_full.xlsx"
+INPUT_FILE = "data/ecommerce_advanced.json"
 OUTPUT_FILE = "data/cleaned_data.xlsx"
 COLUMNS_TO_CLEAN = ["text", "title"]
 SPACY_MODEL = "en_core_web_sm"
-N_PROCESS = 2
+N_PROCESS = 8
 
 # ========== LOGGING ==========
 logging.basicConfig(
@@ -126,8 +126,7 @@ if __name__ == "__main__":
             raise FileNotFoundError(f"❌ File not found: {INPUT_FILE}")
 
         logging.info(f"📥 Loading: {INPUT_FILE}")
-        df = pd.read_excel(INPUT_FILE, engine="openpyxl")
-
+        df = pd.read_json(INPUT_FILE)
 
         df_cleaned = clean_dataframe(df, COLUMNS_TO_CLEAN)
         save_excel(df_cleaned, OUTPUT_FILE)
