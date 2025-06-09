@@ -18,5 +18,5 @@ matplotlib==3.7.2
 wordcloud==1.9.3
 vaderSentiment==3.3.2
 
-llvmlite==0.40.1
+llvmlite==0.39.1
 numba==0.56.4
