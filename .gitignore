@@ -36,7 +36,6 @@ pytest_cache/
 
 # 🗃️ Data Dumps
 data/*.csv
-data/*.json
 data/*.pkl
 
 models/bertopic_model/
