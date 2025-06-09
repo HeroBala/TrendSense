@@ -4,7 +4,7 @@
 
 **TrendSense** is a comprehensive NLP and data visualization pipeline that extracts, analyzes, and visualizes insights from e-commerce-related Reddit discussions. It helps both analysts and entrepreneurs discover real-time market sentiment, popular topics, and consumer pain points.
 
-🚀 **Live Dashboard**: [Explore Here](trendsense-acednyffu2kwqkqmutfbc4/)
+🚀 **Live Dashboard**: [Explore Here](trendsense-acednyffu2kwqkqmutfbc4/streamlit.app)
 
 ---
 
