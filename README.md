@@ -48,7 +48,7 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/trendsense.git
+git clone https://github.com/HeroBala/trendsense.git
 cd trendsense
 
 # Create and activate virtual environment (optional but recommended)
@@ -69,3 +69,4 @@ python analyzer.py
 
 # Step 4: Launch the Streamlit dashboard
 streamlit run dashboard.py
+                                                                      
