@@ -27,7 +27,12 @@ def get_sentiment_label(score):
 @st.cache_data
 def load_all_data():
     cleaned = pd.read_excel("data/cleaned_data.xlsx")
-    raw = pd.read_excel("data/ecommerce_full.xlsx", engine="openpyxl")
+    with open("data/ecommerce_advanced.json") as f:
+        raw = pd.DataFrame(json.load(f))
+    try:
+        labeled = pd.read_excel("models/labeled_data.xlsx")
+    except:
+        labeled = pd.DataFrame()
 
     if "date" not in cleaned.columns or cleaned["date"].isnull().all():
         if "created_utc" in cleaned.columns:
@@ -50,17 +55,16 @@ def load_all_data():
         cleaned["sent_compound"] = cleaned["clean_text"].apply(lambda x: analyzer.polarity_scores(str(x))["compound"])
 
     cleaned["Sentiment"] = cleaned["sent_compound"].apply(get_sentiment_label)
-    return cleaned, raw
+    return cleaned, raw, labeled
 
-cleaned_df, raw_df = load_all_data()
+cleaned_df, raw_df, labeled_df = load_all_data()
 
 # ================== DEFAULT TOPICS ===================
 subreddits = sorted(cleaned_df["subreddit"].dropna().unique())
 sub_default = cleaned_df["subreddit"].value_counts().head(10).index.tolist()
-
-# ================== FILTER BAR ===================
-st.markdown("### :weight_lifting: Filters")
-col1, col2, col3 = st.columns([3, 2, 2])
+# ================== HAMBURGER FILTERS ===================
+with st.expander("🔍 Filter Options", expanded=True):
+    col1, col2, col3 = st.columns(3)
 
 with col1:
     all_selected = st.checkbox("Select All Subreddits", value=True)
@@ -84,10 +88,12 @@ if filtered.empty:
 
 # ================== KPIs ===================
 st.markdown("## :bar_chart: Key Insights")
-col_a, col_b, col_c = st.columns(3)
+col_a, col_b, col_c, col_d = st.columns(4)
 col_a.metric("Total Documents", len(filtered))
 col_b.metric("Unique Subreddits", filtered["subreddit"].nunique())
 col_c.metric("Average Sentiment", round(filtered["sent_compound"].mean(), 2))
+if "topic" in filtered.columns:
+    col_d.metric("Unique Topics", filtered["topic"].nunique())
 
 # ================== DARK THEME SETTINGS ===================
 dark_layout = dict(
@@ -101,9 +107,9 @@ dark_layout = dict(
 )
 
 sentiment_colors = {
-    "Positive": "#2ca02c",  # green
-    "Neutral": "#1f77b4",   # blue
-    "Negative": "#ff7f0e"   # orange
+    "Positive": "#2ca02c",
+    "Neutral": "#1f77b4",
+    "Negative": "#ff7f0e"
 }
 
 def apply_dark_theme(fig, title=None):
@@ -113,7 +119,15 @@ def apply_dark_theme(fig, title=None):
     return fig
 
 # ================== TABS ===================
-tabs = st.tabs([":chart_with_upwards_trend: Charts", ":cloud: Word Cloud", ":page_facing_up: Documents", ":package: Raw JSON", ":brain: Topic Stats"])
+tabs = st.tabs([
+    ":chart_with_upwards_trend: Charts",
+    ":cloud: Word Cloud",
+    ":page_facing_up: Documents",
+    ":package: Raw JSON",
+    ":brain: Topic Stats",
+    ":mag: TF-IDF Terms",
+    ":compass: Topic Explorer"
+])
 
 # ========= Charts =========
 with tabs[0]:
@@ -121,10 +135,9 @@ with tabs[0]:
     filtered["date_only"] = filtered["date"].dt.date
     trend_df = filtered.groupby(["date_only", "Sentiment"]).size().reset_index(name="count")
 
-    # Determine last 7 days range for default view
     if not trend_df["date_only"].empty:
         max_date = trend_df["date_only"].max()
-        min_date = max_date - timedelta(days=6)  # last 7 days
+        min_date = max_date - timedelta(days=6)
         x_range = [min_date, max_date]
     else:
         x_range = None
@@ -158,6 +171,14 @@ with tabs[0]:
     fig_hist = px.histogram(filtered, x="score", nbins=30, title="Distribution of Scores")
     fig_hist = apply_dark_theme(fig_hist)
     st.plotly_chart(fig_hist, use_container_width=True)
+
+    if "topic" in filtered.columns:
+        st.subheader(":trophy: Top Topics by Frequency")
+        top_topics = filtered["topic"].value_counts().reset_index()
+        top_topics.columns = ["Topic", "Count"]
+        fig_topic = px.bar(top_topics.head(15), x="Count", y="Topic", orientation="h", title="Most Frequent Topics")
+        fig_topic = apply_dark_theme(fig_topic)
+        st.plotly_chart(fig_topic, use_container_width=True)
 
 # ========= Word Cloud =========
 with tabs[1]:
@@ -198,3 +219,35 @@ with tabs[4]:
     fig_dist = px.bar(dist_data, x="subreddit", y="count", color="Sentiment", barmode="stack", color_discrete_map=sentiment_colors)
     fig_dist = apply_dark_theme(fig_dist)
     st.plotly_chart(fig_dist, use_container_width=True)
+
+# ========= TF-IDF Terms =========
+with tabs[5]:
+    st.subheader(":mag: TF-IDF Terms by Topic")
+    if not labeled_df.empty and "tfidf_terms" in labeled_df.columns:
+        tfidf_terms = labeled_df[["topic", "tfidf_terms"]].drop_duplicates().sort_values("topic")
+        st.dataframe(tfidf_terms, use_container_width=True)
+    else:
+        st.warning("TF-IDF terms not available in labeled data.")
+
+# ========= Topic Explorer =========
+with tabs[6]:
+    st.subheader(":compass: Topic Explorer")
+
+    if "topic" in filtered.columns:
+        topic_dist = filtered["topic"].value_counts().reset_index()
+        topic_dist.columns = ["Topic", "Count"]
+        fig_pie = px.pie(topic_dist, names="Topic", values="Count", title="Topic Distribution")
+        fig_pie = apply_dark_theme(fig_pie)
+        st.plotly_chart(fig_pie, use_container_width=True)
+
+        sent_topic = filtered.groupby(["topic", "Sentiment"]).size().reset_index(name="count")
+        fig_sent_topic = px.bar(sent_topic, x="topic", y="count", color="Sentiment", barmode="stack", color_discrete_map=sentiment_colors, title="Sentiment Distribution by Topic")
+        fig_sent_topic = apply_dark_theme(fig_sent_topic)
+        st.plotly_chart(fig_sent_topic, use_container_width=True)
+
+        selected_topic = st.selectbox("Select Topic to Explore", options=sorted(filtered["topic"].dropna().unique()))
+        topic_docs = filtered[filtered["topic"] == selected_topic][["title", "clean_text", "Sentiment", "score"]]
+        st.write(f"### Documents for Topic {selected_topic}")
+        st.dataframe(topic_docs, use_container_width=True)
+    else:
+        st.warning("Topic information is not available in the dataset.")
