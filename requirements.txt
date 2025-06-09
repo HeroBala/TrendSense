@@ -1,6 +1,6 @@
 beautifulsoup4==4.13.4
 bertopic==0.10.0
-hdbscan==0.8.27
+hdbscan==0.8.28
 joblib==1.2.0
 nltk==3.8.1
 openpyxl==3.1.2
@@ -18,6 +18,5 @@ matplotlib==3.7.2
 wordcloud==1.9.2
 vaderSentiment==3.3.2
 
-# 🔒 Critical compatibility pins
 llvmlite==0.36.0
 numba==0.53.1
