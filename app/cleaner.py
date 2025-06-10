@@ -1,134 +1,165 @@
-# Import the os module for interacting with the operating system (file checks, removals)
-import os
-# Import re for regular expressions (pattern matching and text cleaning)
-import re
-# Import spacy for advanced natural language processing (NLP)
-import spacy
-# Import pandas as pd for data manipulation and analysis (DataFrames)
-import pandas as pd
-# Import logging for logging messages and information
-import logging
-# Import warnings to manage and filter warning messages
-import warnings
-# Import List and Optional from typing for type hinting
-from typing import List, Optional
-# Import BeautifulSoup for HTML parsing and MarkupResemblesLocatorWarning for warning control
-from bs4 import BeautifulSoup, MarkupResemblesLocatorWarning
-# Import tqdm for progress bars in loops (progress_apply)
-from tqdm import tqdm
-# Import spaCy's download utility to download models if not present
-from spacy.cli import download as spacy_download
+# ========== IMPORTS ==========
+# Standard library imports
+import os  # File system operations (e.g., file removal)
+import re  # Regular expressions for text pattern cleaning
+import logging  # Logging status and errors
+import warnings  # Suppress specific warnings
+from typing import List, Optional  # Type hints for better readability and static checking
 
-# ========== CONFIG ==========
-INPUT_FILE = "data/ecommerce_advanced.json"      # Path to input data file
-OUTPUT_FILE = "data/cleaned_data.xlsx"           # Path to output Excel file
-COLUMNS_TO_CLEAN = ["text", "title"]             # Columns in data to be cleaned
-SPACY_MODEL = "en_core_web_sm"                   # spaCy model to use
-N_PROCESS = 8                                    # Number of processes for spaCy pipeline
+# External libraries
+import spacy  # Natural Language Processing toolkit
+import pandas as pd  # Data loading and manipulation
+from bs4 import BeautifulSoup, MarkupResemblesLocatorWarning  # HTML parsing
+from tqdm import tqdm  # Progress bar for pandas operations
+from spacy.cli import download as spacy_download  # Auto-download spaCy models
+from langdetect import detect  # Language detection utility
+import contractions  # Expand contractions (e.g., don't → do not)
+from textblob import TextBlob  # For spelling correction
+import argparse  # Command-line interface
+import yaml  # Configuration management
 
-# ========== LOGGING ==========
-logging.basicConfig(                             # Configure logging format and level
+# ========== CONFIGURATION LOADING ==========
+# Load preprocessing configuration from YAML file
+with open("config.yaml", "r") as f:
+    config = yaml.safe_load(f)
+
+INPUT_FILE = config["input_file"]
+OUTPUT_FILE = config["output_file"]
+COLUMNS_TO_CLEAN = config["columns_to_clean"]
+SPACY_MODEL = config["spacy_model"]
+N_PROCESS = config["n_process"]
+
+# ========== LOGGING SETUP ==========
+# Log messages to file for debugging and traceability
+logging.basicConfig(
+    filename="preprocessing.log",
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
-# ========== WARNINGS ==========
-warnings.filterwarnings("ignore", category=MarkupResemblesLocatorWarning)  # Ignore specific BeautifulSoup warnings
+# ========== WARNING FILTER ==========
+# Ignore warnings triggered by BeautifulSoup's parser
+warnings.filterwarnings("ignore", category=MarkupResemblesLocatorWarning)
 
-# ========== LOAD NLP MODEL ==========
+# ========== LOAD SPACY MODEL ==========
 def load_spacy_model(model_name: str):
-    """Load a spaCy model, downloading it if necessary."""
+    """Load or download the specified spaCy model."""
     try:
-        logging.info(f"⏳ Loading spaCy model '{model_name}'...")           # Info log for loading model
-        return spacy.load(model_name, disable=["ner", "parser"])           # Load spaCy model (disable NER/parser for speed)
+        logging.info(f"Loading spaCy model '{model_name}'...")
+        return spacy.load(model_name)
     except OSError:
-        logging.warning(f"⚠️ Model '{model_name}' not found. Attempting download...") # Warn if model not found
-        spacy_download(model_name)                                         # Download spaCy model
-        return spacy.load(model_name, disable=["ner", "parser"])           # Load downloaded model
+        logging.warning(f"Model '{model_name}' not found. Downloading...")
+        spacy_download(model_name)
+        return spacy.load(model_name)
 
-nlp = load_spacy_model(SPACY_MODEL)            # Load the specified spaCy model
-logging.info("✅ spaCy model ready.")           # Log model is ready
+nlp = load_spacy_model(SPACY_MODEL)
+logging.info("spaCy model loaded.")
 
-# ========== REGEX PATTERNS ==========
-URL_REGEX = r"https?://\S+|www\.\S+"           # Matches URLs
-EMOJI_REGEX = "[" \
-            u"\U0001F600-\U0001F64F" \
-            u"\U0001F300-\U0001F5FF" \
-            u"\U0001F680-\U0001F6FF" \
-            u"\U0001F1E0-\U0001F1FF" \
-            "]+"                               # Matches emojis
-MARKDOWN_REGEX = r"(?m)^#{1,6}|\*|[-•]"        # Matches markdown syntax
-SPECIAL_REGEX = r"[^\w\s]"                     # Matches special characters (not word or whitespace)
-MULTISPACE_REGEX = r"\s+"                      # Matches multiple spaces
+# ========== REGEX PATTERNS FOR CLEANING ==========
+# Precompiled regex for speed and reuse
+URL_PATTERN = re.compile(r"https?://\S+|www\.\S+")
+EMOJI_PATTERN = re.compile("[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF\U0001F1E0-\U0001F1FF]+")
+MARKDOWN_PATTERN = re.compile(r"(?m)^#{1,6}|\*|[-\u2022]")
+SPECIAL_PATTERN = re.compile(r"[^\w\s]")
+MULTISPACE_PATTERN = re.compile(r"\s+")
 
-URL_PATTERN = re.compile(URL_REGEX)             # Compiled regex for URLs
-EMOJI_PATTERN = re.compile(EMOJI_REGEX)         # Compiled regex for emojis
-MARKDOWN_PATTERN = re.compile(MARKDOWN_REGEX)   # Compiled regex for markdown
-SPECIAL_PATTERN = re.compile(SPECIAL_REGEX)     # Compiled regex for special characters
-MULTISPACE_PATTERN = re.compile(MULTISPACE_REGEX) # Compiled regex for multiple spaces
-
-# ========== CUSTOM STOPWORDS ==========
-CUSTOM_STOPWORDS = {
-    "ecommerce", "store", "product", "buy", "sell", "amazon", "shopify"
-}  # Set of custom words to exclude during NLP processing
+# Custom domain-specific stopwords
+CUSTOM_STOPWORDS = {"ecommerce", "store", "product", "buy", "sell", "amazon", "shopify"}
 
 # ========== CLEANING FUNCTIONS ==========
+def is_english(text: str) -> bool:
+    """Detect if the given text is in English."""
+    try:
+        return detect(text) == 'en'
+    except:
+        return False
+
+def correct_spelling(text: str) -> str:
+    """Use TextBlob to correct spelling in the text."""
+    return str(TextBlob(text).correct())
 
 def basic_clean(text: Optional[str]) -> str:
-    """Aggressive normalization: markdown, html, urls, emojis, symbols."""
-    if not isinstance(text, str):                       # If the input is not a string, return empty string
+    """Apply a series of regex and library-based cleaning steps."""
+    if not isinstance(text, str):
         return ""
-    text = BeautifulSoup(text, "html.parser").get_text()# Remove HTML tags using BeautifulSoup
-    text = MARKDOWN_PATTERN.sub(" ", text)              # Remove markdown syntax
-    text = URL_PATTERN.sub(" ", text)                   # Remove URLs
-    text = EMOJI_PATTERN.sub(" ", text)                 # Remove emojis
-    text = SPECIAL_PATTERN.sub(" ", text)               # Remove special characters
-    text = MULTISPACE_PATTERN.sub(" ", text)            # Normalize multiple spaces to single space
-    return text.strip().lower()                         # Trim spaces and convert to lowercase
+    text = contractions.fix(text)  # Expand contractions
+    text = BeautifulSoup(text, "html.parser").get_text()  # Remove HTML
+    text = MARKDOWN_PATTERN.sub(" ", text)  # Remove markdown
+    text = URL_PATTERN.sub(" ", text)  # Remove URLs
+    text = EMOJI_PATTERN.sub(" ", text)  # Remove emojis
+    text = SPECIAL_PATTERN.sub(" ", text)  # Remove special characters
+    text = MULTISPACE_PATTERN.sub(" ", text)  # Normalize whitespace
+    return text.strip().lower()  # Lowercasing for normalization
+
+def tokenize(text: str) -> List[str]:
+    """Tokenize cleaned text using simple whitespace split."""
+    return text.split()
 
 def lemmatize_texts(texts: List[str]) -> List[str]:
-    """Lemmatize using spaCy pipeline."""
-    lemmatized = []                                     # List to hold lemmatized texts
-    logging.info(f"🔀 spaCy pipe starting with {len(texts)} texts (n_process={N_PROCESS})...") # Log start
-    for doc in nlp.pipe(texts, batch_size=1000, n_process=N_PROCESS): # Process texts in batches, parallelized
+    """Apply POS-filtered lemmatization using spaCy."""
+    lemmatized = []
+    logging.info(f"Starting spaCy pipeline on {len(texts)} texts...")
+    for doc in nlp.pipe(texts, batch_size=1000, n_process=N_PROCESS):
         tokens = [
             token.lemma_ for token in doc
-            if not token.is_stop and token.is_alpha and len(token) > 2 and token.lemma_ not in CUSTOM_STOPWORDS
-        ]                                               # Filter out stopwords, non-alphabetic, short tokens, custom stopwords
-        lemmatized.append(" ".join(tokens))              # Join tokens into string
-    logging.info("✅ Lemmatization complete.")           # Log completion
-    return lemmatized                                   # Return list of lemmatized strings
+            if token.pos_ in {"NOUN", "VERB", "ADJ"} and  # POS filtering
+               token.is_alpha and  # Keep alphabetic words only
+               not token.is_stop and  # Remove stopwords
+               token.ent_type_ == "" and  # Remove named entities
+               len(token) > 2 and  # Filter short tokens
+               token.lemma_ not in CUSTOM_STOPWORDS  # Custom domain stopwords
+        ]
+        lemmatized.append(" ".join(tokens))
+    logging.info("Lemmatization complete.")
+    return lemmatized
 
-# ========== MAIN PROCESSING ==========
 def clean_dataframe(df: pd.DataFrame, columns: List[str]) -> pd.DataFrame:
-    """Clean and lemmatize specified columns in a DataFrame."""
+    """Execute full cleaning pipeline for selected columns."""
     for col in columns:
-        if col not in df.columns:                       # Check if required column exists
+        if col not in df.columns:
             raise KeyError(f"Missing required column: '{col}'")
-        logging.info(f"🔄 Cleaning column: {col}")       # Log which column is being cleaned
-        tqdm.pandas(desc=f"🧼 Cleaning {col}")           # Set up tqdm progress bar for pandas
-        df[f"{col}_pre"] = df[col].progress_apply(basic_clean) # Apply basic cleaning, save intermediate
-        texts = df[f"{col}_pre"].tolist()                # Get cleaned texts as list
-        if all(not t for t in texts):                    # If all cleaned texts are empty
-            logging.warning(f"⚠️ Skipping '{col}' - all texts are empty after cleaning.")
-            df[f"clean_{col}"] = ""                      # Set cleaned col to empty
-        else:
-            df[f"clean_{col}"] = lemmatize_texts(texts)  # Lemmatize cleaned texts
-            df[f"clean_{col}"] = df[f"clean_{col}"].str.replace(MULTISPACE_REGEX, " ", regex=True) # Normalize spaces
-        # Show sample
-        logging.info(f"🔍 Sample '{col}' clean preview:") # Log preview
-        print(df[[col, f"clean_{col}"]].head(3))         # Print first 3 rows of original + cleaned
-    return df                                            # Return cleaned DataFrame
+        logging.info(f"Cleaning column: {col}")
+        tqdm.pandas(desc=f"Cleaning {col}")
+
+        # Language filtering
+        df = df[df[col].apply(lambda x: is_english(str(x)))]
+
+        # Basic and spelling cleaning
+        df[f"{col}_pre"] = df[col].progress_apply(basic_clean)
+        df[f"{col}_pre"] = df[f"{col}_pre"].progress_apply(correct_spelling)
+
+        # Tokenization
+        df[f"{col}_tokens"] = df[f"{col}_pre"].apply(tokenize)
+
+        # Lemmatization
+        texts = df[f"{col}_pre"].tolist()
+        df[f"clean_{col}"] = lemmatize_texts(texts)
+        df[f"clean_{col}"] = df[f"clean_{col}"].str.replace(MULTISPACE_PATTERN, " ", regex=True)
+
+        logging.info(f"Sample cleaned data from column '{col}':")
+        print(df[[col, f"clean_{col}"]].head(3))
+    return df
 
 def save_excel(df: pd.DataFrame, path: str):
-    """Save DataFrame to Excel file, overwriting if exists."""
-    if os.path.exists(path):                             # Check if file exists
-        logging.warning(f"⚠️ File already exists: {path}. Overwriting.")
-        os.remove(path)                                  # Remove existing file
-    df.to_excel(path, index=False, engine="openpyxl")    # Save DataFrame to Excel
-    logging.info(f"✅ Excel saved to: {path}")            # Log save
+    """Export cleaned DataFrame to Excel format."""
+    if os.path.exists(path):
+        logging.warning(f"File exists and will be overwritten: {path}")
+        os.remove(path)
+    df.to_excel(path, index=False, engine="openpyxl")
+    logging.info(f"Excel saved to: {path}")
 
-# ========== EXECUTION ==========
-if __name__ == "__main__":                              # If script is run directly
+# ========== SCRIPT EXECUTION ==========
+if __name__ == "__main__":
+    # Command-line argument parsing for input/output control
+    parser = argparse.ArgumentParser(description="Text Preprocessing Pipeline")
+    parser.add_argument("--input", type=str, help="Path to input JSON file", default=INPUT_FILE)
+    parser.add_argument("--output", type=str, help="Path to output Excel file", default=OUTPUT_FILE)
+    args = parser.parse_args()
+
     try:
-        if
+        # Load input data and run cleaning pipeline
+        df = pd.read_json(args.input)
+        df_cleaned = clean_dataframe(df, COLUMNS_TO_CLEAN)
+        save_excel(df_cleaned, args.output)
+    except Exception as e:
+        logging.error(f"Processing failed: {e}")
