@@ -1,10 +1,8 @@
 # 🧠 TrendSense – Reddit E-commerce Insights Platform
 
-![TrendSense Dashboard Preview](https://via.placeholder.com/1000x400.png?text=Dashboard+Preview)
 
 **TrendSense** is a comprehensive NLP and data visualization pipeline that extracts, analyzes, and visualizes insights from e-commerce-related Reddit discussions. It helps both analysts and entrepreneurs discover real-time market sentiment, popular topics, and consumer pain points.
 
-🚀 **Live Dashboard**: [Explore Here](trendsense-acednyffu2kwqkqmutfbc4.streamlit.app)
 
 ---
 
@@ -70,3 +68,4 @@ python analyzer.py
 # Step 4: Launch the Streamlit dashboard
 streamlit run dashboard.py
                                                                       
+
